@@ -12,7 +12,7 @@ stop_words = set(stopwords.words('english'))
 # -  Converts to lowercase, removes non-alphabetic characters, and eliminates stopwords.
 def preprocess_text(text):
     text = text.lower()
-    # Elimina todo lo que no sean letras o espacios
+    # This removes every thing but letters and blank spaces
     text = re.sub(r'[^a-z\s]', '', text)
     tokens = text.split()
     tokens = [word for word in tokens if word not in stop_words]
