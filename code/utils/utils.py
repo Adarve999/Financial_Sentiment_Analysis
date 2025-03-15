@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 from nltk import ngrams
 import random
+import seaborn as sns
 
 
 
@@ -141,8 +142,9 @@ def plot_entity_frequencies(entity_counts, model_name):
 
 ############################################# TF-IDF ###########################################
 
+# Basic TF-IDF function:
 # Function to get top TF-IDF terms for each sentiment
-def get_top_tfidf_terms(df, column='Notices', label_column='Y', n_terms=20):
+def basic_top_tfidf_terms(df, column='Notices', label_column='Y', n_terms=20):
     # Create a corpus for each sentiment category
     sentiment_categories = df[label_column].unique()
     corpus_by_sentiment = {}
@@ -196,3 +198,162 @@ def get_top_tfidf_terms(df, column='Notices', label_column='Y', n_terms=20):
     
     return top_terms
 
+# Function to create merged documents for each sentiment class
+def create_merged_docs(df, column='Notices', label_column='Y', chunk_size=10):
+    """
+    Creates merged documents for each sentiment class.
+    
+    Args:
+        df: DataFrame containing the text data
+        column: Column name containing the text
+        label_column: Column name containing the sentiment labels
+        chunk_size: Number of documents to merge into one chunk
+    
+    Returns:
+        Dictionary with sentiment classes as keys and lists of merged documents as values
+    """
+    sentiment_categories = df[label_column].unique()
+    merged_docs_by_sentiment = {}
+    
+    for sentiment in sentiment_categories:
+        subset = df[df[label_column] == sentiment]
+        texts = subset[column].tolist()
+        
+        # Shuffle the texts to get a random mix
+        random.seed(42)  # For reproducibility
+        random.shuffle(texts)
+        
+        # Create chunks of texts
+        chunks = []
+        for i in range(0, len(texts), chunk_size):
+            chunk = ' '.join(texts[i:i+chunk_size])
+            chunks.append(chunk)
+        
+        merged_docs_by_sentiment[sentiment] = chunks
+    
+    return merged_docs_by_sentiment
+
+# Function to create a single merged document for each sentiment class
+def create_single_merged_docs(df, column='Notices', label_column='Y'):
+    """
+    Creates a single merged document for each sentiment class.
+    
+    Args:
+        df: DataFrame containing the text data
+        column: Column name containing the text
+        label_column: Column name containing the sentiment labels
+    
+    Returns:
+        Dictionary with sentiment classes as keys and merged documents as values
+    """
+    sentiment_categories = df[label_column].unique()
+    merged_docs_by_sentiment = {}
+    
+    for sentiment in sentiment_categories:
+        subset = df[df[label_column] == sentiment]
+        merged_doc = ' '.join(subset[column].tolist())
+        merged_docs_by_sentiment[sentiment] = [merged_doc]  # Wrap in list for consistency
+    
+    return merged_docs_by_sentiment
+
+# Function to get top TF-IDF terms for each sentiment
+def get_top_tfidf_terms(corpus_by_sentiment, n_terms=20):
+    """
+    Gets the top TF-IDF terms for each sentiment.
+    
+    Args:
+        corpus_by_sentiment: Dictionary with sentiment classes as keys and lists of preprocessed documents as values
+        n_terms: Number of top terms to return
+    
+    Returns:
+        Dictionary with sentiment classes as keys and lists of (term, score) tuples as values
+    """
+    # Flatten all documents for TF-IDF calculation
+    all_docs = []
+    for sentiment, docs in corpus_by_sentiment.items():
+        all_docs.extend(docs)
+    
+    # Create and fit TF-IDF vectorizer
+    vectorizer = TfidfVectorizer(
+        max_features=10000,  # Limit to top 10,000 features to manage memory
+        min_df=2,            # Ignore terms that appear in fewer than 2 documents
+        max_df=0.95,         # Ignore terms that appear in more than 95% of documents
+        ngram_range=(1, 1)   # Only use unigrams
+    )
+    
+    tfidf_matrix = vectorizer.fit_transform(all_docs)
+    feature_names = vectorizer.get_feature_names_out()
+    
+    # Get top terms for each sentiment category
+    top_terms = {}
+    start_idx = 0
+    
+    for sentiment, docs in corpus_by_sentiment.items():
+        docs_count = len(docs)
+        if docs_count == 0:
+            continue
+            
+        # Get the TF-IDF scores for this sentiment's documents
+        end_idx = start_idx + docs_count
+        sentiment_tfidf = tfidf_matrix[start_idx:end_idx]
+        start_idx = end_idx
+        
+        # Calculate average TF-IDF score for each term across all documents of this sentiment
+        avg_tfidf = np.asarray(sentiment_tfidf.mean(axis=0)).flatten()
+        
+        # Get indices of top terms
+        top_indices = avg_tfidf.argsort()[-n_terms:][::-1]
+        
+        # Store top terms and their scores
+        top_terms[sentiment] = [(feature_names[i], avg_tfidf[i]) for i in top_indices]
+    
+    return top_terms
+
+# Main code to run the analysis
+def run_tfidf_analysis(df, column='Notices', label_column='Y', n_terms=20):
+    # Preprocess all texts
+    df['processed_text'] = df[column].apply(lambda x: ' '.join(preprocess_text_nums(x)))
+    
+    # Approach 1: TF-IDF on merged chunks (10 documents per chunk)
+    merged_docs = create_merged_docs(df, column='processed_text', label_column=label_column, chunk_size=10)
+    top_terms_chunks = get_top_tfidf_terms(merged_docs, n_terms=n_terms)
+    
+    # Approach 2: TF-IDF on single merged document per class
+    single_merged_docs = create_single_merged_docs(df, column='processed_text', label_column=label_column)
+    top_terms_single = get_top_tfidf_terms(single_merged_docs, n_terms=n_terms)
+    
+    return top_terms_chunks, top_terms_single
+
+# Visualize the results
+def visualize_results(top_terms_chunks, top_terms_single):
+    # Visualize top terms from chunks
+    plt.figure(figsize=(15, 4 * len(top_terms_chunks)))
+    plt.suptitle("Top TF-IDF Terms Using Merged Chunks", fontsize=16)
+    
+    for i, (sentiment, terms) in enumerate(top_terms_chunks.items()):
+        plt.subplot(len(top_terms_chunks), 1, i+1)
+        
+        terms_df = pd.DataFrame(terms, columns=['term', 'tfidf'])
+        sns.barplot(x='tfidf', y='term', data=terms_df, palette='viridis')
+        
+        plt.title(f"Sentiment: '{sentiment}'")
+        plt.tight_layout()
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.show()
+    
+    # Visualize top terms from single merged document
+    plt.figure(figsize=(15, 4 * len(top_terms_single)))
+    plt.suptitle("Top TF-IDF Terms Using Single Merged Document Per Class", fontsize=16)
+    
+    for i, (sentiment, terms) in enumerate(top_terms_single.items()):
+        plt.subplot(len(top_terms_single), 1, i+1)
+        
+        terms_df = pd.DataFrame(terms, columns=['term', 'tfidf'])
+        sns.barplot(x='tfidf', y='term', data=terms_df, palette='viridis')
+        
+        plt.title(f"Sentiment: '{sentiment}'")
+        plt.tight_layout()
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    plt.show()
