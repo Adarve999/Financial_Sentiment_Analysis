@@ -4,10 +4,19 @@ import re
 import spacy 
 from collections import Counter
 import matplotlib.pyplot as plt
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pandas as pd
+import numpy as np
+from nltk import ngrams
+import random
+
+
 
 nltk.download('stopwords')
 stop_words = set(stopwords.words('english'))
 
+
+############################################## Pre-processing functions ############################################
 
 # -  Converts to lowercase, removes non-alphabetic characters, and eliminates stopwords.
 def preprocess_text(text):
@@ -90,6 +99,19 @@ def preprocess_text_nums(text, custom_stop_words=None):
     
     return tokens
 
+# Now we do a function that tokenizes by n-grams:
+def tokenize_ngrams(text, n=2):
+    # First, preprocess the text using the existing function
+    tokens = preprocess_text(text)
+    
+    # Generate n-grams
+    n_grams = list(ngrams(tokens, n))
+    
+    # Join the n-grams into strings
+    n_gram_tokens = [' '.join(gram) for gram in n_grams]
+    
+    return n_gram_tokens
+
 ############################################# NER ###########################################
 
 # Function to extract named entities
@@ -114,3 +136,63 @@ def plot_entity_frequencies(entity_counts, model_name):
     plt.ylabel("Entities")
     plt.title(f"Most Frequent Named Entities ({model_name})")
     plt.show()
+
+
+
+############################################# TF-IDF ###########################################
+
+# Function to get top TF-IDF terms for each sentiment
+def get_top_tfidf_terms(df, column='Notices', label_column='Y', n_terms=20):
+    # Create a corpus for each sentiment category
+    sentiment_categories = df[label_column].unique()
+    corpus_by_sentiment = {}
+    
+    for sentiment in sentiment_categories:
+        subset = df[df[label_column] == sentiment]
+        # Preprocess each document and join tokens back to strings for the vectorizer
+        corpus_by_sentiment[sentiment] = [
+            ' '.join(preprocess_text_nums(text)) 
+            for text in subset[column]
+        ]
+    
+    # Flatten all documents for TF-IDF calculation
+    all_docs = []
+    for sentiment in sentiment_categories:
+        all_docs.extend(corpus_by_sentiment[sentiment])
+    
+    # Create and fit TF-IDF vectorizer
+    vectorizer = TfidfVectorizer(
+        max_features=10000,  # Limit to top 10,000 features to manage memory
+        min_df=2,            # Ignore terms that appear in fewer than 2 documents
+        max_df=0.95,         # Ignore terms that appear in more than 95% of documents
+        ngram_range=(1, 1)   # Only use unigrams
+    )
+    
+    tfidf_matrix = vectorizer.fit_transform(all_docs)
+    feature_names = vectorizer.get_feature_names_out()
+    
+    # Get top terms for each sentiment category
+    top_terms = {}
+    start_idx = 0
+    
+    for sentiment in sentiment_categories:
+        docs_count = len(corpus_by_sentiment[sentiment])
+        if docs_count == 0:
+            continue
+            
+        # Get the TF-IDF scores for this sentiment's documents
+        end_idx = start_idx + docs_count
+        sentiment_tfidf = tfidf_matrix[start_idx:end_idx]
+        start_idx = end_idx
+        
+        # Calculate average TF-IDF score for each term across all documents of this sentiment
+        avg_tfidf = np.asarray(sentiment_tfidf.mean(axis=0)).flatten()
+        
+        # Get indices of top terms
+        top_indices = avg_tfidf.argsort()[-n_terms:][::-1]
+        
+        # Store top terms and their scores
+        top_terms[sentiment] = [(feature_names[i], avg_tfidf[i]) for i in top_indices]
+    
+    return top_terms
+
