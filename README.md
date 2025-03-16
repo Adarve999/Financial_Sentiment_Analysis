@@ -9,14 +9,12 @@
 ---
 
 ## **Step 2: Simple Methods (Baseline Models)**
-### 1. **Lexicon-Based Sentiment Analysis**
-   - Use the **Loughran-McDonald Financial Sentiment Dictionary**.
-   - Count the number of positive/negative words.
-   - Assign sentiment based on the difference.
-
-### 2. **Bag-of-Words (BoW) + Logistic Regression / Naïve Bayes**
-   - Convert text into a frequency matrix using **CountVectorizer**.
-   - Train a **Naïve Bayes** or **Logistic Regression** classifier.
+### 1. **Bag-of-Words (BoW) + Logistic Regression / Naïve Bayes**
+- Convert text into a frequency matrix using **CountVectorizer**.
+- Train models:
+  - **Naïve Bayes classifier**
+  - **Logistic Regression classifier**
+- Compare performance using precision, recall, and F1-score.
 
 ---
 
