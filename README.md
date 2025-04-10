@@ -62,3 +62,22 @@
 - Use confusion matrices, ROC curves, and SHAP analysis for feature importance.
 
 ----
+
+## **Step 6: Generative Modeling for Controlled Text Generation**
+
+### 6.1 **Fine-Tuning a Pretrained Language Model (GPT-2)**
+
+- Using our dataset for transfer learning the model learns to generate realistic financial headlines conditioned on the sentiment and instruction.
+
+### 6.2 **Prompt Engineering for Entity-Enforced Generation**
+- At inference time, generate headlines with prompts like:
+  ```
+  Sentiment: positive
+  Instruction: Generate a financial headline that includes at least one financial entity.
+  Headline:
+  ```
+- This guides the model to include **companies, indexes, or sectors** in its output, addressing issues with empty or generic responses.
+
+### 6.3 **Multiple Generations per Sentiment**
+- Generate multiple headlines per sentiment (e.g., 10 positive, 10 negative, 10 neutral) for content diversification.
+- Useful for **data augmentation**, report writing, or synthetic dataset creation.
