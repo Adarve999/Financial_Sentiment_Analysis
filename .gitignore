@@ -175,3 +175,4 @@ cython_debug/
 
 # PreTrained models
 *.pt
+code/finetuned_gpt2/*
